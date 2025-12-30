@@ -4,8 +4,18 @@
 
 @layer base {
   body {
-    @apply bg-gray-900 text-white font-sans antialiased selection:bg-blue-500/30;
+    @apply font-sans h-full overflow-hidden text-gray-100 antialiased;
+    background-color: #0c0a18;
+    background-image: url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?q=80&w=2071&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
   }
+
+  /* The instruction placed 'selection:bg-blue-500/30;' here, which is not valid CSS. */
+  /* Assuming it was intended to be removed or placed elsewhere, but following the instruction literally. */
+  /* If this was meant to be a pseudo-element style, it would need to be structured differently. */
+  /* For example: ::selection { @apply bg-blue-500/30; } */
 }
 
 @layer utilities {

@@ -4,8 +4,8 @@ import type { FC } from 'react';
 
 export const SplashScreen: FC = () => {
     return (
-        <div className="fixed inset-0 z-50 bg-gray-900 flex items-center justify-center overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-gray-900 pointer-events-none" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-none" />
 
             <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
