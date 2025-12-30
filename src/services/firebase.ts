@@ -7,9 +7,12 @@ const firebaseConfigStr = import.meta.env.VITE_FIREBASE_CONFIG_JSON;
 let firebaseConfig = {};
 
 try {
-    firebaseConfig = firebaseConfigStr ? JSON.parse(firebaseConfigStr) : {};
+    // Basic cleanup in case of extra quotes
+    const cleanStr = firebaseConfigStr ? firebaseConfigStr.replace(/^'|'$/g, '') : '';
+    firebaseConfig = cleanStr ? JSON.parse(cleanStr) : {};
+    console.log("Firebase Config Parsed Successfully:", Object.keys(firebaseConfig));
 } catch (e) {
-    console.error("Error parsing VITE_FIREBASE_CONFIG_JSON", e);
+    console.error("Error parsing VITE_FIREBASE_CONFIG_JSON", e, firebaseConfigStr);
 }
 
 export const appId = import.meta.env.VITE_APP_ID || 'lumendose-app-standalone';
@@ -19,9 +22,16 @@ let db: Firestore | undefined;
 let auth: Auth | undefined;
 
 if (Object.keys(firebaseConfig).length > 0) {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    auth = getAuth(app);
+    try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        console.log("Firebase Initialized Successfully");
+    } catch (err) {
+        console.error("Firebase Initialization Failed:", err);
+    }
+} else {
+    console.error("Firebase Config is Empty!");
 }
 
 export { app, db, auth };

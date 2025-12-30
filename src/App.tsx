@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useDrinks } from './hooks/useDrinks';
 import { useTranslation, LanguageProvider } from './context/LanguageContext';
 import { AuthScreen } from './features/AuthScreen';
+import { SplashScreen } from './components/SplashScreen';
 import { BrainVisual } from './features/BrainVisual';
 import { AICoach } from './features/AICoach';
 import { DrinkLogger } from './features/DrinkLogger';
@@ -127,15 +128,22 @@ function Dashboard() {
   );
 }
 
+
 function AppContent() {
   const { user, loading } = useAuth();
+  const [showSplash, setShowSplash] = useState(true);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <Loader2 className="animate-spin text-purple-500" size={48} />
-      </div>
-    );
+  useEffect(() => {
+    // Keep splash screen for at least 2.5 seconds or until auth loads
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show splash if we're enforcing the timer OR if auth is still initialising
+  if (showSplash || loading) {
+    return <SplashScreen />;
   }
 
   if (!user) {
