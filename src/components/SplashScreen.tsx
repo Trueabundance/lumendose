@@ -18,14 +18,14 @@ export const SplashScreen: FC = () => {
                         boxShadow: ["0 0 20px rgba(59, 130, 246, 0.2)", "0 0 60px rgba(168, 85, 247, 0.4)", "0 0 20px rgba(59, 130, 246, 0.2)"]
                     }}
                     transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                    className="bg-gray-800/50 p-6 rounded-3xl border border-white/10 backdrop-blur-xl mb-6 relative"
+                    className="bg-black/60 p-8 rounded-3xl border border-white/20 backdrop-blur-xl mb-8 relative shadow-[0_0_50px_rgba(59,130,246,0.5)]"
                 >
                     <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                        className="absolute inset-0 rounded-3xl border border-blue-500/20 border-t-blue-500/50"
+                        className="absolute inset-0 rounded-3xl border border-cyan-400/30 border-t-cyan-400/80"
                     />
-                    <Brain className="text-blue-400 w-20 h-20" strokeWidth={1.5} />
+                    <Brain className="text-cyan-400 w-24 h-24 drop-shadow-[0_0_15px_rgba(34,211,238,0.8)]" strokeWidth={1.5} />
                 </motion.div>
 
                 <motion.div
