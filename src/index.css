@@ -4,12 +4,7 @@
 
 @layer base {
   body {
-    @apply font-sans h-full overflow-hidden text-gray-100 antialiased;
-    background-color: #0c0a18;
-    background-image: url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?q=80&w=2071&auto=format&fit=crop');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
+    @apply bg-gray-900 text-white font-sans antialiased selection:bg-blue-500/30;
   }
 
   /* The instruction placed 'selection:bg-blue-500/30;' here, which is not valid CSS. */

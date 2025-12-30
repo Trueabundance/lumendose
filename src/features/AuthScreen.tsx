@@ -30,22 +30,22 @@ export const AuthScreen: FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] pointer-events-none" />
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-gray-900 pointer-events-none" />
 
             <div className="w-full max-w-md relative z-10">
                 <div className="flex flex-col items-center mb-8">
-                    <div className="relative mb-6">
-                        <div className="absolute inset-0 bg-cyan-500 blur-2xl opacity-30 rounded-full" />
-                        <Brain className="text-white relative z-10 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]" size={80} />
+                    <div className="relative mb-4">
+                        <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 rounded-full" />
+                        <Brain className="text-blue-400 relative z-10" size={64} />
                     </div>
-                    <h1 className="text-5xl font-bold text-white drop-shadow-md tracking-tight mb-2">
+                    <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
                         LumenDose
                     </h1>
-                    <p className="text-gray-200 text-lg font-medium drop-shadow-sm">Mindful drinking, visualized.</p>
+                    <p className="text-gray-400 mt-2">Mindful drinking, visualized.</p>
                 </div>
 
-                <Card className="bg-black/60 border-white/20 shadow-2xl backdrop-blur-md">
+                <Card>
                     <h2 className="text-2xl font-bold text-center mb-6 text-white">
                         {isLogin ? 'Welcome Back' : 'Create Account'}
                     </h2>
