@@ -73,10 +73,10 @@ export const BrainVisual: FC<BrainVisualProps> = ({ analysis, showCards }) => {
 
                         // Calculate positions for a fan effect - adjusted to be responsive
                         const isMobile = window.innerWidth < 768;
-                        const spread = isMobile ? 30 : 40;
-                        const rotate = (index - 2.5) * (isMobile ? 5 : 10);
+                        const spread = isMobile ? 25 : 40;
+                        const rotate = (index - 2.5) * (isMobile ? 8 : 10);
                         const tx = (index - 2.5) * spread;
-                        const ty = Math.abs(index - 2.5) * (isMobile ? 5 : 10);
+                        const ty = Math.abs(index - 2.5) * (isMobile ? 8 : 10);
 
                         return (
                             <motion.div

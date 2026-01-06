@@ -29,9 +29,9 @@ export const Modal: FC<ModalProps> = ({ isOpen, onClose, title, children, classN
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className={`fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md bg-gray-800/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden ${className}`}
+                        className={`fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[95%] sm:w-full max-w-md max-h-[90vh] flex flex-col bg-gray-800/90 border border-white/10 rounded-2xl shadow-2xl overflow-hidden ${className}`}
                     >
-                        <div className="flex justify-between items-center p-4 border-b border-white/10">
+                        <div className="flex justify-between items-center p-4 border-b border-white/10 shrink-0">
                             {title && <h2 className="text-xl font-bold text-white tracking-tight">{title}</h2>}
                             <button
                                 onClick={onClose}
@@ -41,7 +41,7 @@ export const Modal: FC<ModalProps> = ({ isOpen, onClose, title, children, classN
                             </button>
                         </div>
 
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto custom-scrollbar">
                             {children}
                         </div>
                     </motion.div>
