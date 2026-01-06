@@ -144,7 +144,6 @@ export const translations: Translations = {
         settings_gender_female: "Female",
         settings_gender_saved: "Preference saved!",
     },
-},
     es: {
         app_title: "LumenDose",
         header_premium_button: "Hazte Premium",
