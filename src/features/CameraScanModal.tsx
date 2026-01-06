@@ -38,39 +38,65 @@ export const CameraScanModal: FC<CameraScanModalProps> = ({ isOpen, onClose, onS
 
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = async () => {
-            const base64ImageData = (reader.result as string).split(',')[1];
-            try {
-                const prompt = `Analyze this image of a drink container. Extract the drink type (e.g., beer, wine), volume in ml, and ABV %. Respond ONLY with JSON: {"type": string, "volume": number, "abv": number}.`;
-                const resultText = await generateGeminiInsight(prompt, base64ImageData);
+        reader.onload = async (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = async () => {
+                // Resize image to avoid payload limits (max 1024px)
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const maxDim = 1024;
+                let width = img.width;
+                let height = img.height;
 
-                if (resultText) {
-                    // Clean markdown code blocks if present
-                    const cleanText = resultText.replace(/```json\n|\n```/g, '').replace(/```/g, '').trim();
-                    const jsonMatch = cleanText.match(/\{.*\}/s);
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
 
-                    if (jsonMatch) {
-                        const data = JSON.parse(jsonMatch[0]);
-                        // Basic validation
-                        if (data && data.type && typeof data.volume === 'number' && typeof data.abv === 'number') {
-                            onScanSuccess(data);
-                            onClose();
-                            setPreview(null); // Reset preview
+                canvas.width = width;
+                canvas.height = height;
+                ctx?.drawImage(img, 0, 0, width, height);
+
+                const base64ImageData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; // 0.8 quality
+
+                try {
+                    const prompt = `Analyze this image of a drink container. Extract the drink type (e.g., beer, wine), volume in ml, and ABV %. Respond ONLY with JSON: {"type": string, "volume": number, "abv": number}.`;
+                    const resultText = await generateGeminiInsight(prompt, base64ImageData);
+
+                    if (resultText) {
+                        const cleanText = resultText.replace(/```json\n|\n```/g, '').replace(/```/g, '').trim();
+                        const jsonMatch = cleanText.match(/\{.*\}/s);
+
+                        if (jsonMatch) {
+                            const data = JSON.parse(jsonMatch[0]);
+                            if (data && data.type) {
+                                onScanSuccess(data);
+                                onClose();
+                                setPreview(null);
+                            } else {
+                                throw new Error("Missing drink type in analysis");
+                            }
                         } else {
-                            throw new Error("Missing required fields (type, volume, abv)");
+                            throw new Error("Invalid format received from AI");
                         }
                     } else {
-                        throw new Error("Invalid format received from AI");
+                        throw new Error("No result from AI");
                     }
-                } else {
-                    throw new Error("No result");
+                } catch (err: any) {
+                    console.error("Scan error:", err);
+                    let msg = err.message || "Unknown error";
+                    if (msg.includes("API Key")) msg = "Gemini API Key missing on server.";
+                    setError("Scan Failed: " + msg);
+                } finally {
+                    setIsLoading(false);
                 }
-            } catch (err: any) {
-                console.error("Scan error:", err);
-                setError(t('scan_error_alert') + " " + (err.message || ""));
-            } finally {
-                setIsLoading(false);
-            }
+            };
         };
         reader.onerror = () => {
             setError("Error reading file");

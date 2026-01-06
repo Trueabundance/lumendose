@@ -82,13 +82,22 @@ export const AICoach: FC<AICoachProps> = ({ drinks, analysis, dailyAlcoholGoal }
             }
         } catch (err: any) {
             console.error("AI Coach Error:", err);
-            setError(err.message === "Gemini API Key is missing."
-                ? t('ai_coach_no_key')
-                : "Could not connect to AI Coach.");
+            // FALLBACK: If API fails, generate a local insight so the feature isn't broken
+            const safeInsight = generateLocalInsight(drinks, totalGrams);
+            setInsight(safeInsight + " (Offline Mode)");
         } finally {
             setIsLoading(false);
         }
     }, [drinks, analysis, t, dailyAlcoholGoal]);
+
+    // Helper for offline insights
+    const generateLocalInsight = (currentDrinks: Drink[], grams: string) => {
+        const count = currentDrinks.length;
+        if (count > 4) return "Pace yourself. Hydrate now to reduce tomorrow's impact.";
+        if (count > 2) return "Consider a glass of water between drinks to stay balanced.";
+        if (parseFloat(grams) > 40) return "You've reached a high intake level. Good time for a break?";
+        return "Enjoy responsibly. Tracking your intake helps you stay in control.";
+    };
 
     useEffect(() => {
         if (drinks.length >= 1 && isVisible) {
