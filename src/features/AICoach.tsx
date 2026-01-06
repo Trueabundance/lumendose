@@ -21,7 +21,7 @@ export const AICoach: FC<AICoachProps> = ({ drinks, analysis, dailyAlcoholGoal }
     const [isVisible, setIsVisible] = useState(true);
 
     const generateInsight = useCallback(async () => {
-        if (!drinks || drinks.length < 2 || !analysis) return;
+        if (!drinks || drinks.length < 1 || !analysis) return;
         setIsLoading(true);
         setError(null);
         setInsight('');
@@ -79,12 +79,12 @@ export const AICoach: FC<AICoachProps> = ({ drinks, analysis, dailyAlcoholGoal }
     }, [drinks, analysis, t, dailyAlcoholGoal]);
 
     useEffect(() => {
-        if (drinks.length >= 2 && isVisible) {
+        if (drinks.length >= 1 && isVisible) {
             generateInsight();
         }
     }, [drinks.length, isVisible]); // Removed generateInsight from deps to avoid loops, though useCallback handles it.
 
-    if (drinks.length < 2 || !isVisible) return null;
+    if (drinks.length < 1 || !isVisible) return null;
 
     return (
         <AnimatePresence>
