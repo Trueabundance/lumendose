@@ -5,7 +5,7 @@ export const generateGeminiInsight = async (prompt: string, imageBase64?: string
         throw new Error("Gemini API Key is missing.");
     }
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
     let parts: any[] = [{ text: prompt }];
     if (imageBase64) {
