@@ -25,10 +25,22 @@ export const AICoach: FC<AICoachProps> = ({ drinks, analysis, dailyAlcoholGoal }
         setIsLoading(true);
         setError(null);
         setInsight('');
+        console.log("AI Coach: Generating insight...", { drinksCount: drinks.length, analysisKeys: Object.keys(analysis) });
 
         const sessionSummary = drinks.map(d => `${d.volume}ml of ${d.type} at ${d.abv}% ABV`).join(', ');
+        if (!analysis || Object.keys(analysis).length === 0) return;
         const totalGrams = drinks.reduce((sum, d) => sum + d.alcoholGrams, 0).toFixed(1);
-        const highestImpactRegion = Object.values(analysis).sort((a, b) => b.impact - a.impact)[0];
+
+        const analysisValues = Object.values(analysis);
+        const highestImpactRegion = analysisValues.length > 0
+            ? analysisValues.sort((a, b) => b.impact - a.impact)[0]
+            : null;
+
+        if (!highestImpactRegion) {
+            console.warn("AI Coach: No impact region data found.");
+            return;
+        }
+
         const highestImpactRegionData = Object.values(brainRegionsData).find(r => r.name === highestImpactRegion.name);
 
         const firstDrinkTime = new Date(drinks[drinks.length - 1].timestamp);
