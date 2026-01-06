@@ -66,12 +66,15 @@ export const CameraScanModal: FC<CameraScanModalProps> = ({ isOpen, onClose, onS
             const resultText = await generateGeminiInsight(prompt, base64ImageData);
 
             if (resultText) {
-                const jsonMatch = resultText.match(/\{.*\}/s);
+                // Clean markdown code blocks if present
+                const cleanText = resultText.replace(/```json\n|\n```/g, '').replace(/```/g, '').trim();
+                const jsonMatch = cleanText.match(/\{.*\}/s);
+
                 if (jsonMatch) {
                     onScanSuccess(JSON.parse(jsonMatch[0]));
                     onClose();
                 } else {
-                    throw new Error("Invalid format");
+                    throw new Error("Invalid format received from AI");
                 }
             } else {
                 throw new Error("No result");
