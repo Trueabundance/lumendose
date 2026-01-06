@@ -31,10 +31,10 @@ const RegionDetailModal: FC<{ isOpen: boolean; onClose: () => void; cardData: Br
                     {cardData.impactWord} Impact
                 </span>
             </div>
-            <p className="text-xl text-center text-gray-200 font-medium mb-4">{cardData.effectText}</p>
+            <p className="text-lg text-center text-gray-200 font-medium mb-4 leading-relaxed">{cardData.effectText}</p>
             <div className="bg-gray-900/50 p-4 rounded-xl border border-white/5">
                 <h4 className="text-sm uppercase text-gray-500 font-bold mb-2">Function</h4>
-                <p className="text-sm text-gray-300">{brainRegionsData[cardData.name.replace('region_', '')]?.functions}</p>
+                <p className="text-sm text-gray-300 leading-relaxed">{brainRegionsData[cardData.name.replace('region_', '')]?.functions}</p>
             </div>
         </Modal>
     );

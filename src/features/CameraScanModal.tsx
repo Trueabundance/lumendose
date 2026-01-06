@@ -1,5 +1,5 @@
-import { type FC, useRef, useState, useEffect } from 'react';
-import { Camera, Loader2 } from 'lucide-react';
+import { type FC, useState, type ChangeEvent } from 'react';
+import { Camera, Loader2, Upload, AlertCircle } from 'lucide-react';
 import { useTranslation } from '../context/LanguageContext';
 import { Modal } from '../components/Modal';
 import { Button } from '../components/Button';
@@ -13,110 +13,116 @@ interface CameraScanModalProps {
 
 export const CameraScanModal: FC<CameraScanModalProps> = ({ isOpen, onClose, onScanSuccess }) => {
     const { t } = useTranslation();
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [preview, setPreview] = useState<string | null>(null);
 
-    useEffect(() => {
-        let stream: MediaStream | null = null;
-        const startCamera = async () => {
-            if (isOpen) {
-                setError('');
-                try {
-                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                        setError("Camera not supported.");
-                        return;
-                    }
-                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                    }
-                } catch (err) {
-                    console.error("Camera error:", err);
-                    setError("Camera permission denied.");
-                }
-            }
+    const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Preview
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setPreview(reader.result as string);
         };
+        reader.readAsDataURL(file);
 
-        startCamera();
+        // Process with Gemini
+        await processImage(file);
+    };
 
-        return () => {
-            if (stream) stream.getTracks().forEach(track => track.stop());
-            if (videoRef.current) videoRef.current.srcObject = null;
-        };
-    }, [isOpen]);
-
-    const handleCapture = async () => {
-        if (!videoRef.current || !canvasRef.current) return;
+    const processImage = async (file: File) => {
         setIsLoading(true);
         setError('');
 
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const context = canvas.getContext('2d');
-        context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async () => {
+            const base64ImageData = (reader.result as string).split(',')[1];
+            try {
+                const prompt = `Analyze this image of a drink container. Extract the drink type (e.g., beer, wine), volume in ml, and ABV %. Respond ONLY with JSON: {"type": string, "volume": number, "abv": number}.`;
+                const resultText = await generateGeminiInsight(prompt, base64ImageData);
 
-        const base64ImageData = canvas.toDataURL('image/jpeg').split(',')[1];
+                if (resultText) {
+                    // Clean markdown code blocks if present
+                    const cleanText = resultText.replace(/```json\n|\n```/g, '').replace(/```/g, '').trim();
+                    const jsonMatch = cleanText.match(/\{.*\}/s);
 
-        try {
-            const prompt = `Analyze this image of a drink container. Extract the drink type (e.g., beer, wine), volume in ml, and ABV %. Respond ONLY with JSON: {"type": string, "volume": number, "abv": number}.`;
-            const resultText = await generateGeminiInsight(prompt, base64ImageData);
-
-            if (resultText) {
-                // Clean markdown code blocks if present
-                const cleanText = resultText.replace(/```json\n|\n```/g, '').replace(/```/g, '').trim();
-                const jsonMatch = cleanText.match(/\{.*\}/s);
-
-                if (jsonMatch) {
-                    onScanSuccess(JSON.parse(jsonMatch[0]));
-                    onClose();
+                    if (jsonMatch) {
+                        const data = JSON.parse(jsonMatch[0]);
+                        // Basic validation
+                        if (data && data.type && typeof data.volume === 'number' && typeof data.abv === 'number') {
+                            onScanSuccess(data);
+                            onClose();
+                            setPreview(null); // Reset preview
+                        } else {
+                            throw new Error("Missing required fields (type, volume, abv)");
+                        }
+                    } else {
+                        throw new Error("Invalid format received from AI");
+                    }
                 } else {
-                    throw new Error("Invalid format received from AI");
+                    throw new Error("No result");
                 }
-            } else {
-                throw new Error("No result");
+            } catch (err: any) {
+                console.error("Scan error:", err);
+                setError(t('scan_error_alert') + " " + (err.message || ""));
+            } finally {
+                setIsLoading(false);
             }
-        } catch (err) {
-            console.error("Scan error:", err);
-            setError(t('scan_error_alert'));
-        } finally {
+        };
+        reader.onerror = () => {
+            setError("Error reading file");
             setIsLoading(false);
-        }
+        };
     };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={t('camera_modal_title')}>
-            <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden mb-4 border border-gray-700">
-                {!error ? (
-                    <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover"></video>
-                ) : (
-                    <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-red-400">
+            <div className="flex flex-col items-center">
+                <div className="w-full aspect-video bg-gray-900 rounded-lg overflow-hidden mb-6 border border-gray-700 relative flex items-center justify-center">
+                    {preview ? (
+                        <img src={preview} alt="Preview" className="w-full h-full object-contain" />
+                    ) : (
+                        <div className="text-gray-600 flex flex-col items-center">
+                            <Upload size={48} className="mb-2 opacity-50" />
+                            <span className="text-sm">No image selected</span>
+                        </div>
+                    )}
+
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white backdrop-blur-sm z-10">
+                            <Loader2 className="animate-spin mb-2" size={32} />
+                            <span className="text-sm font-medium">{t('camera_modal_analyzing')}</span>
+                        </div>
+                    )}
+                </div>
+
+                {error && (
+                    <div className="mb-4 bg-red-500/10 border border-red-500/50 text-red-400 p-3 rounded-lg text-sm w-full flex items-center gap-2">
+                        <AlertCircle size={16} />
                         {error}
                     </div>
                 )}
-                <canvas ref={canvasRef} className="hidden"></canvas>
 
-                {isLoading && (
-                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white backdrop-blur-sm">
-                        <Loader2 className="animate-spin mb-2" size={32} />
-                        <span className="text-sm font-medium">{t('camera_modal_analyzing')}</span>
-                    </div>
-                )}
+                <p className="text-center text-gray-400 text-sm mb-6">{t('camera_modal_prompt')}</p>
+
+                <div className="w-full relative">
+                    <Button className="w-full" icon={<Camera size={20} />} disabled={isLoading}>
+                        {isLoading ? t('camera_modal_analyzing') : t('camera_modal_capture')}
+                    </Button>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                        onChange={handleFileChange}
+                        disabled={isLoading}
+                    />
+                </div>
+                <p className="text-xs text-gray-500 mt-2 text-center w-full">Compatible with mobile cameras and file uploads.</p>
             </div>
-
-            <p className="text-center text-gray-400 text-sm mb-4">{t('camera_modal_prompt')}</p>
-
-            <Button
-                onClick={handleCapture}
-                disabled={isLoading || !!error}
-                className="w-full"
-                icon={<Camera size={20} />}
-            >
-                {t('camera_modal_capture')}
-            </Button>
         </Modal>
     );
 };
