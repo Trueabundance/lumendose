@@ -12,6 +12,8 @@ import { CameraScanModal } from './features/CameraScanModal';
 import { analyzeConsumption } from './utils/analysis';
 import { Brain, LogOut, Loader2 } from 'lucide-react';
 import { Button } from './components/Button';
+import { LanguageSelector } from './components/LanguageSelector';
+import { Achievements } from './features/Achievements';
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -75,6 +77,8 @@ function Dashboard() {
               </Button>
             )}
 
+            <LanguageSelector />
+
             <Button variant="ghost" size="sm" onClick={logout} icon={<LogOut size={18} />}>
               <span className="hidden sm:inline">Logout</span>
             </Button>
@@ -116,6 +120,8 @@ function Dashboard() {
             drinks={drinks}
             onUpgrade={() => setIsPremium(true)}
           />
+
+          <Achievements drinksCount={drinks.length} />
         </div>
       </main>
 

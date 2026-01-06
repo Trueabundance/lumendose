@@ -62,7 +62,7 @@ export const BrainVisual: FC<BrainVisualProps> = ({ analysis, showCards }) => {
 
     return (
         <>
-            <div className="h-[400px] w-full relative perspective-1000 flex items-center justify-center">
+            <div className="h-[400px] w-full relative perspective-1000 flex items-center justify-center overflow-visible md:overflow-hidden touch-pan-y">
                 <AnimatePresence>
                     {showCards && cards.map((card, index) => {
                         const impactLevel = card.impactWord.toLowerCase();
@@ -71,10 +71,12 @@ export const BrainVisual: FC<BrainVisualProps> = ({ analysis, showCards }) => {
                         else if (impactLevel === 'moderate') borderColor = 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]';
                         else if (impactLevel === 'high') borderColor = 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]';
 
-                        // Calculate positions for a fan effect
-                        const rotate = (index - 2.5) * 10;
-                        const tx = (index - 2.5) * 40;
-                        const ty = Math.abs(index - 2.5) * 10;
+                        // Calculate positions for a fan effect - adjusted to be responsive
+                        const isMobile = window.innerWidth < 768;
+                        const spread = isMobile ? 30 : 40;
+                        const rotate = (index - 2.5) * (isMobile ? 5 : 10);
+                        const tx = (index - 2.5) * spread;
+                        const ty = Math.abs(index - 2.5) * (isMobile ? 5 : 10);
 
                         return (
                             <motion.div
@@ -84,7 +86,7 @@ export const BrainVisual: FC<BrainVisualProps> = ({ analysis, showCards }) => {
                                 transition={{ delay: index * 0.1, type: "spring", stiffness: 100 }}
                                 whileHover={{ scale: 1.1, zIndex: 10, y: -20, rotate: 0 }}
                                 onClick={() => setSelectedCard(card)}
-                                className="absolute cursor-pointer w-36 h-56"
+                                className="absolute cursor-pointer w-28 h-44 md:w-36 md:h-56"
                                 style={{ transformStyle: 'preserve-3d' }}
                             >
                                 <div className={`w-full h-full bg-gray-800 rounded-xl border-2 ${borderColor} flex flex-col justify-between p-3 relative overflow-hidden group`}>
