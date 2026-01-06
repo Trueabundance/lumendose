@@ -46,9 +46,10 @@ export const Modal: FC<ModalProps> = ({ isOpen, onClose, title, children, classN
                                 {children}
                             </div>
                         </motion.div>
-                    </>
+                    </motion.div>
+                </>
             )}
-                </AnimatePresence>,
-            document.body
-            );
+        </AnimatePresence>,
+        document.body
+    );
 };
