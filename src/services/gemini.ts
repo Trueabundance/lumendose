@@ -27,9 +27,15 @@ export const generateGeminiInsight = async (prompt: string, imageBase64?: string
         });
         const result = await response.json();
 
+        if (result.error) {
+            throw new Error(result.error.message || "Gemini API Error");
+        }
+
         if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
             return result.candidates[0].content.parts[0].text;
         }
+
+        console.warn("Gemini unexpected response:", result);
         return null;
     } catch (error) {
         console.error("Error calling Gemini API:", error);
