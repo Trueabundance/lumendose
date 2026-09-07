@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from '../components/Modal';
-import { Key, ShieldCheck, Cpu, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import { Key, ShieldCheck, Cpu, Check } from 'lucide-react';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
