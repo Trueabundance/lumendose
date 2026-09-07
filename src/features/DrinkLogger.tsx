@@ -1,202 +1,214 @@
-import React, { useState } from 'react';
-import { Drink, DrinkType } from '../types';
-import { Plus, Trash2, Beer, Wine, Flame, Sparkles, Droplets, Zap } from 'lucide-react';
+import type { FC } from 'react';
+import { useState } from 'react';
+import { Plus, Trash2, History, Droplet } from 'lucide-react';
+import { useTranslation } from '../context/LanguageContext';
+import type { Drink } from '../types';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { Modal } from '../components/Modal';
 
 interface DrinkLoggerProps {
-  drinks: Drink[];
-  onAddDrink: (name: string, abv: number, volumeMl: number, type: DrinkType) => void;
-  onRemoveDrink: (id: string) => void;
-  onLogWater: () => void;
+    onLogDrink: (drink: Omit<Drink, 'id'>) => void;
+    drinks: Drink[];
+    onDeleteDrink: (id: string) => void;
+    onScanRequest: () => void;
 }
 
-const PRESET_DRINKS = [
-  { name: 'Standard Beer', type: 'beer' as const, abv: 5.0, volumeMl: 355, icon: Beer, color: 'text-amber-400 border-amber-500/40 bg-amber-950/30' },
-  { name: 'Pint Craft IPA', type: 'beer' as const, abv: 6.8, volumeMl: 473, icon: Beer, color: 'text-amber-300 border-amber-500/40 bg-amber-950/30' },
-  { name: 'Red / White Wine', type: 'wine' as const, abv: 12.5, volumeMl: 150, icon: Wine, color: 'text-rose-400 border-rose-500/40 bg-rose-950/30' },
-  { name: 'Whiskey / Vodka Shot', type: 'shot' as const, abv: 40.0, volumeMl: 45, icon: Flame, color: 'text-orange-400 border-orange-500/40 bg-orange-950/30' },
-  { name: 'Craft Cocktail', type: 'cocktail' as const, abv: 15.0, volumeMl: 200, icon: Sparkles, color: 'text-purple-400 border-purple-500/40 bg-purple-950/30' }
-];
+export const DrinkLogger: FC<DrinkLoggerProps> = ({ onLogDrink, drinks, onDeleteDrink, onScanRequest }) => {
+    const { t } = useTranslation();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    // Persist custom presets to local storage
+    const [customPresets, setCustomPresets] = useState<Array<{ type: string; volume: number; abv: number; label: string }>>(() => {
+        const saved = localStorage.getItem('lumendose_custom_presets');
+        return saved ? JSON.parse(saved) : [];
+    });
 
-export const DrinkLogger: React.FC<DrinkLoggerProps> = ({
-  drinks,
-  onAddDrink,
-  onRemoveDrink,
-  onLogWater
-}) => {
-  const [customName, setCustomName] = useState<string>('');
-  const [customAbv, setCustomAbv] = useState<number>(5.0);
-  const [customVolume, setCustomVolume] = useState<number>(355);
-  const [customType, setCustomType] = useState<DrinkType>('custom');
+    const defaultQuickAdds = [
+        { type: 'beer', volume: 568, abv: 4.5, label: "Pint of Beer" },
+        { type: 'wine', volume: 175, abv: 13, label: "Large Wine" },
+        { type: 'spirit', volume: 25, abv: 40, label: "Shot" },
+    ];
 
-  const handleCustomAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    onAddDrink(
-      customName.trim() || 'Custom Beverage',
-      customAbv,
-      customVolume,
-      customType
+    const allQuickAdds = [...defaultQuickAdds, ...customPresets];
+
+    const handleQuickAdd = (qa: typeof allQuickAdds[0]) => {
+        onLogDrink({
+            type: qa.type,
+            volume: qa.volume,
+            abv: qa.abv,
+            alcoholGrams: qa.volume * (qa.abv / 100) * 0.789,
+            timestamp: new Date().toISOString()
+        });
+    };
+
+    const addCustomPreset = (type: string, volume: number, abv: number, label: string) => {
+        const newPreset = { type, volume, abv, label };
+        const updated = [...customPresets, newPreset];
+        setCustomPresets(updated);
+        localStorage.setItem('lumendose_custom_presets', JSON.stringify(updated));
+    };
+
+    const deleteCustomPreset = (index: number) => {
+        const updated = customPresets.filter((_, i) => i !== index);
+        setCustomPresets(updated);
+        localStorage.setItem('lumendose_custom_presets', JSON.stringify(updated));
+    };
+
+    const ManualLogModal = () => {
+        const [type, setType] = useState('beer');
+        const [volume, setVolume] = useState(330);
+        const [abv, setAbv] = useState(5);
+        const [saveAsPreset, setSaveAsPreset] = useState(false);
+        const [presetLabel, setPresetLabel] = useState('');
+
+        const handleSubmit = () => {
+            if (saveAsPreset && presetLabel) {
+                addCustomPreset(type, Number(volume), Number(abv), presetLabel);
+            }
+
+            onLogDrink({
+                type,
+                volume: Number(volume),
+                abv: Number(abv),
+                alcoholGrams: Number(volume) * (Number(abv) / 100) * 0.789,
+                timestamp: new Date().toISOString()
+            });
+            setIsModalOpen(false);
+        };
+
+        return (
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={t('modal_title')}>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm text-gray-400 mb-1">{t('modal_drink_type')}</label>
+                        <select className="w-full bg-gray-700 rounded-lg p-3 text-white border border-gray-600" value={type} onChange={e => setType(e.target.value)}>
+                            <option value="beer">Beer</option>
+                            <option value="wine">Wine</option>
+                            <option value="spirit">Spirit</option>
+                            <option value="cocktail">Cocktail</option>
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">{t('modal_volume')}</label>
+                            <input type="number" className="w-full bg-gray-700 rounded-lg p-3 text-white border border-gray-600" value={volume} onChange={e => setVolume(Number(e.target.value))} />
+                        </div>
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">{t('modal_abv')}</label>
+                            <input type="number" className="w-full bg-gray-700 rounded-lg p-3 text-white border border-gray-600" value={abv} onChange={e => setAbv(Number(e.target.value))} />
+                        </div>
+                    </div>
+
+                    <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                        <div className="flex items-center gap-2 mb-2">
+                            <input
+                                type="checkbox"
+                                id="savePreset"
+                                checked={saveAsPreset}
+                                onChange={(e) => setSaveAsPreset(e.target.checked)}
+                                className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-offset-gray-900"
+                            />
+                            <label htmlFor="savePreset" className="text-sm text-gray-300">Save as Quick Add</label>
+                        </div>
+                        {saveAsPreset && (
+                            <input
+                                type="text"
+                                placeholder="Preset Name (e.g. My Favorite IPA)"
+                                className="w-full bg-gray-700 rounded-lg p-2 text-sm text-white border border-gray-600"
+                                value={presetLabel}
+                                onChange={(e) => setPresetLabel(e.target.value)}
+                            />
+                        )}
+                    </div>
+
+                    <Button onClick={handleSubmit} className="w-full" size="lg">{t('modal_add_button')}</Button>
+                </div>
+            </Modal>
+        );
+    };
+
+    return (
+        <Card className="h-full flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Droplet className="text-blue-400" />
+                    {t('section_title_control')}
+                </h3>
+                <Button variant="ghost" size="sm" onClick={onScanRequest}>
+                    Scan Label
+                </Button>
+            </div>
+
+            <div className="mb-6">
+                <p className="text-xs text-gray-400 font-bold uppercase mb-2">Quick Add</p>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                    <Button onClick={() => setIsModalOpen(true)} icon={<Plus size={18} />}>
+                        {t('button_log_drink')}
+                    </Button>
+                    {defaultQuickAdds.map((qa, idx) => (
+                        <Button key={`default-${idx}`} variant="secondary" size="sm" onClick={() => handleQuickAdd(qa)}>
+                            {qa.label}
+                        </Button>
+                    ))}
+                </div>
+            </div>
+
+            {customPresets.length > 0 && (
+                <div className="mb-6">
+                    <p className="text-xs text-blue-400 font-bold uppercase mb-2">My Presets</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        {customPresets.map((qa, idx) => (
+                            <div key={`custom-${idx}`} className="relative group">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => handleQuickAdd(qa)}
+                                    className="w-full border border-blue-500/30"
+                                >
+                                    {qa.label}
+                                </Button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); deleteCustomPreset(idx); }}
+                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                <h4 className="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2">
+                    <History size={14} /> Recent Log
+                </h4>
+                <div className="space-y-2">
+                    {drinks.length === 0 ? (
+                        <p className="text-gray-500 text-sm text-center py-4">{t('log_empty')}</p>
+                    ) : (
+                        drinks.map(drink => (
+                            <div key={drink.id} className="bg-gray-700/30 p-3 rounded-lg flex justify-between items-center group hover:bg-gray-700/50 transition-colors">
+                                <div>
+                                    <p className="font-semibold capitalize text-sm">{drink.type}</p>
+                                    <p className="text-xs text-gray-400">{drink.volume}ml • {drink.abv}%</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm font-mono text-blue-300">{drink.alcoholGrams.toFixed(1)}g</span>
+                                    <button
+                                        onClick={() => drink.id && onDeleteDrink(drink.id)}
+                                        className="text-gray-600 hover:text-red-400 transition-colors"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+
+            <ManualLogModal />
+        </Card>
     );
-    setCustomName('');
-  };
-
-  const calculateEthGrams = (volumeMl: number, abv: number) => {
-    // ethanol density = ~0.789 g/ml
-    return Math.round(volumeMl * (abv / 100) * 0.789);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Quick Add Presets */}
-      <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-cyan-500/30 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-orbitron font-bold text-lg text-cyan-300 text-glow-cyan flex items-center gap-2">
-            <Zap className="w-5 h-5 text-cyan-400" /> QUICK DOSE PRESETS
-          </h3>
-          <span className="text-xs font-mono text-cyan-400/70">1-CLICK LOGGING</span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {PRESET_DRINKS.map((preset, idx) => {
-            const Icon = preset.icon;
-            const ethGrams = calculateEthGrams(preset.volumeMl, preset.abv);
-            const stdDrinks = ((preset.volumeMl * (preset.abv / 100)) / 17.7).toFixed(1);
-
-            return (
-              <button
-                key={idx}
-                onClick={() => onAddDrink(preset.name, preset.abv, preset.volumeMl, preset.type)}
-                className={`p-4 rounded-xl border transition-all hover:scale-105 flex flex-col items-center text-center cursor-pointer ${preset.color}`}
-              >
-                <Icon className="w-6 h-6 mb-2" />
-                <div className="font-orbitron font-bold text-xs text-white line-clamp-1">{preset.name}</div>
-                <div className="text-[10px] font-mono text-slate-300 mt-1">
-                  {preset.volumeMl}ml • {preset.abv}% ABV
-                </div>
-                <div className="mt-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-black/40 border border-white/10 text-cyan-300">
-                  {stdDrinks} Std ({ethGrams}g pure alc)
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Custom Drink Creator Form */}
-      <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-cyan-500/30 space-y-4">
-        <h3 className="font-orbitron font-bold text-base text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-          <Plus className="w-4 h-4 text-cyan-400" /> CUSTOM BEVERAGE FORMULATION
-        </h3>
-
-        <form onSubmit={handleCustomAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="block text-xs font-mono text-cyan-400/80 mb-1">Beverage Name</label>
-            <input
-              type="text"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              placeholder="e.g. Imperial Stout, Margarita"
-              className="w-full bg-slate-900/80 border border-cyan-500/30 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-cyan-400/80 mb-1">
-              Alcohol by Volume (ABV): <span className="font-bold text-cyan-300">{customAbv}%</span>
-            </label>
-            <input
-              type="range"
-              min="0.5"
-              max="70"
-              step="0.5"
-              value={customAbv}
-              onChange={(e) => setCustomAbv(parseFloat(e.target.value))}
-              className="w-full accent-cyan-400 cursor-pointer"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-cyan-400/80 mb-1">
-              Volume (ml): <span className="font-bold text-cyan-300">{customVolume} ml</span>
-            </label>
-            <input
-              type="range"
-              min="25"
-              max="1000"
-              step="25"
-              value={customVolume}
-              onChange={(e) => setCustomVolume(parseInt(e.target.value))}
-              className="w-full accent-cyan-400 cursor-pointer"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 shadow-neon-cyan font-orbitron font-bold text-xs tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>LOG BEVERAGE</span>
-          </button>
-        </form>
-      </div>
-
-      {/* Active Session Log */}
-      <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-cyan-500/30 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-orbitron font-bold text-base text-cyan-300 uppercase tracking-wider">
-            ACTIVE SESSION LOG ({drinks.length} ENTRIES)
-          </h3>
-          <button
-            onClick={onLogWater}
-            className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            <Droplets className="w-3.5 h-3.5" />
-            <span>+300ML WATER</span>
-          </button>
-        </div>
-
-        {drinks.length === 0 ? (
-          <div className="p-8 text-center border border-dashed border-cyan-500/20 rounded-xl text-slate-500 font-mono text-xs">
-            No beverages logged in current session. Select a preset above or scan a label to initiate telemetry.
-          </div>
-        ) : (
-          <div className="space-y-2.5 max-h-72 overflow-y-auto custom-scrollbar">
-            {drinks.map((drink) => (
-              <div
-                key={drink.id}
-                className="p-3.5 rounded-xl bg-slate-900/70 border border-cyan-500/20 flex items-center justify-between gap-3 font-mono text-xs hover:border-cyan-400/40 transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/30">
-                    <Beer className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-sm">{drink.name}</div>
-                    <div className="text-[11px] text-slate-400">
-                      {drink.volumeMl}ml @ {drink.abv}% ABV • {drink.timestamp.toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="text-cyan-300 font-bold">{drink.standardDrinks} Std</div>
-                    <div className="text-[10px] text-slate-400">
-                      {calculateEthGrams(drink.volumeMl, drink.abv)}g pure alc
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => onRemoveDrink(drink.id)}
-                    className="p-2 rounded-lg hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-500/40 transition-all cursor-pointer"
-                    title="Remove Drink"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 };

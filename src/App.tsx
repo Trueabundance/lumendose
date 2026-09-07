@@ -1,241 +1,168 @@
-import React, { useState, useEffect } from 'react';
-import { SciFiBackground } from './components/SciFiBackground';
-import { Navbar } from './components/Navbar';
-import { Modal } from './components/Modal';
-import { TelemetryDashboard } from './features/TelemetryDashboard';
+import { useState, useMemo, useEffect } from 'react';
+import { useAuth } from './hooks/useAuth';
+import { useDrinks } from './hooks/useDrinks';
+import { useTranslation, LanguageProvider } from './context/LanguageContext';
+import { AuthScreen } from './features/AuthScreen';
+import { SplashScreen } from './components/SplashScreen';
 import { BrainVisual } from './features/BrainVisual';
-import { DrinkLogger } from './features/DrinkLogger';
-import { LabelScanner } from './features/LabelScanner';
 import { AICoach } from './features/AICoach';
-import { ApiKeyModal } from './features/ApiKeyModal';
-import { Drink, DrinkType, UserProfile } from './types';
-import { Sparkles, Activity, ShieldAlert, CheckCircle2 } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { DrinkLogger } from './features/DrinkLogger';
+import { PremiumDashboard } from './features/PremiumDashboard';
+import { CameraScanModal } from './features/CameraScanModal';
+import { analyzeConsumption } from './utils/analysis';
+import { Brain, LogOut, Loader2 } from 'lucide-react';
+import { Button } from './components/Button';
+import { LanguageSelector } from './components/LanguageSelector';
+import { Achievements } from './features/Achievements';
 
-export function App() {
-  const [drinks, setDrinks] = useState<Drink[]>(() => {
-    // Initial sample session drink
-    return [
-      {
-        id: '1',
-        name: 'Craft Pilsner',
-        type: 'beer',
-        volumeMl: 355,
-        abv: 5.0,
-        standardDrinks: 1.0,
-        timestamp: new Date(Date.now() - 45 * 60 * 1000) // 45 mins ago
-      }
-    ];
-  });
+function Dashboard() {
+  const { user, logout } = useAuth();
+  const { drinks, loading: drinksLoading, addDrink, deleteDrink } = useDrinks(user?.uid || null);
+  const { t } = useTranslation();
+  const [isPremium, setIsPremium] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
 
-  const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: 'Operator',
-    weightKg: 75,
-    gender: 'male',
-    targetBacLimit: 0.05
-  });
+  // Derived state
+  const analysis = useMemo(() => analyzeConsumption(drinks, t), [drinks, t]);
+  const totalAlcohol = drinks.reduce((sum, d) => sum + d.alcoholGrams, 0).toFixed(1);
 
-  const [activeSection, setActiveSection] = useState<string>('telemetry');
-  const [isScanOpen, setIsScanOpen] = useState<boolean>(false);
-  const [isCoachOpen, setIsCoachOpen] = useState<boolean>(false);
-  const [isApiKeyOpen, setIsApiKeyOpen] = useState<boolean>(false);
-  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('LUMENDOSE_API_KEY') || '');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Compute Widmark Estimated BAC
-  const computeBac = (): number => {
-    if (drinks.length === 0) return 0.0;
-
-    let totalGrams = 0;
-    const now = Date.now();
-    const r = userProfile.gender === 'male' ? 0.68 : 0.55;
-    const bodyWeightGrams = userProfile.weightKg * 1000;
-
-    // Sum alcohol intake with time decay
-    drinks.forEach(d => {
-      const ethGrams = d.volumeMl * (d.abv / 100) * 0.789;
-      const hoursPassed = (now - d.timestamp.getTime()) / (1000 * 60 * 60);
-      
-      // Widmark formula: BAC = (Grams / (Weight * r)) * 100 - (0.015 * Hours)
-      const rawBacContrib = ((ethGrams) / (bodyWeightGrams * r)) * 100;
-      const decayedContrib = Math.max(0, rawBacContrib - (0.015 * hoursPassed));
-      totalGrams += decayedContrib;
-    });
-
-    return Number(totalGrams.toFixed(3));
-  };
-
-  const bacEstimate = computeBac();
-
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
-  };
-
-  const handleAddDrink = (name: string, abv: number, volumeMl: number, type: DrinkType) => {
-    const stdDrinks = Number(((volumeMl * (abv / 100)) / 17.7).toFixed(1));
-    const newDrink: Drink = {
-      id: Math.random().toString(36).substring(2, 9),
-      name,
-      abv,
-      volumeMl,
-      type,
-      standardDrinks: stdDrinks > 0 ? stdDrinks : 1.0,
-      timestamp: new Date()
-    };
-
-    setDrinks(prev => [newDrink, ...prev]);
-    triggerToast(`Logged ${name} (${abv}% ABV)`);
-    confetti({ particleCount: 30, spread: 60, origin: { y: 0.8 } });
-  };
-
-  const handleRemoveDrink = (id: string) => {
-    setDrinks(prev => prev.filter(d => d.id !== id));
-    triggerToast('Drink entry removed from telemetry log.');
-  };
-
-  const handleLogWater = () => {
-    triggerToast('Hydration logged: +300ml water ingested.');
-    confetti({ particleCount: 20, spread: 40, colors: ['#00f3ff', '#3b82f6'] });
-  };
-
-  const handleResetSession = () => {
-    if (window.confirm('Reset current session telemetry and clear logged beverages?')) {
-      setDrinks([]);
-      triggerToast('Telemetry reset to 0.00% BAC baseline.');
+  const handleScanSuccess = (data: any) => {
+    if (data.type && data.volume && data.abv) {
+      addDrink({
+        type: data.type.toLowerCase(),
+        volume: Number(data.volume),
+        abv: Number(data.abv),
+        alcoholGrams: Number(data.volume) * (Number(data.abv) / 100) * 0.789,
+        timestamp: new Date().toISOString()
+      });
     }
   };
 
-  const handleSaveApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem('LUMENDOSE_API_KEY', key);
-    triggerToast('Gemini API key configuration saved.');
-  };
+  if (drinksLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Loader2 className="animate-spin text-blue-500" size={48} />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-w-[320px] min-h-screen flex flex-col relative bg-[#050814] text-slate-100 font-sans selection:bg-cyan-500/30">
-      {/* Sci-Fi Canvas Background */}
-      <SciFiBackground />
+    <div className="min-h-screen bg-gray-900 text-white font-sans selection:bg-purple-500/30">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-lg">
+              <Brain className="text-white" size={20} />
+            </div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 text-transparent bg-clip-text hidden sm:block">
+              LumenDose
+            </h1>
+          </div>
 
-      {/* Futuristic Navbar */}
-      <Navbar
-        bacEstimate={bacEstimate}
-        onOpenScan={() => setIsScanOpen(true)}
-        onOpenCoach={() => setIsCoachOpen(true)}
-        onOpenApiKey={() => setIsApiKeyOpen(true)}
-        onResetSession={handleResetSession}
-        activeSection={activeSection}
-        setActiveSection={setActiveSection}
-      />
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:block text-right mr-2">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Total Intake</p>
+              <p className="text-xl font-bold text-blue-400 leading-none">{totalAlcohol}<span className="text-sm text-gray-500">g</span></p>
+            </div>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 z-10 space-y-8">
-        {/* Navigation Tabs (Mobile View) */}
-        <div className="flex md:hidden items-center justify-around glass-panel p-2 rounded-xl border border-cyan-500/20 font-orbitron text-xs">
-          <button
-            onClick={() => setActiveSection('telemetry')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              activeSection === 'telemetry' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40' : 'text-slate-400'
-            }`}
-          >
-            TELEMETRY
-          </button>
-          <button
-            onClick={() => setActiveSection('brain')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              activeSection === 'brain' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40' : 'text-slate-400'
-            }`}
-          >
-            NEURAL MAP
-          </button>
-          <button
-            onClick={() => setActiveSection('logger')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              activeSection === 'logger' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40' : 'text-slate-400'
-            }`}
-          >
-            DOSE LOG
-          </button>
+            {!isPremium && (
+              <Button
+                variant="premium"
+                size="sm"
+                onClick={() => setIsPremium(true)}
+                className="hidden sm:flex"
+              >
+                {t('header_premium_button')}
+              </Button>
+            )}
+
+            <LanguageSelector />
+
+            <Button variant="ghost" size="sm" onClick={logout} icon={<LogOut size={18} />}>
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto p-4 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        {/* Left Column: Visualization & Insights (7 columns) */}
+        <div className="lg:col-span-7 space-y-6">
+          <section className="bg-gray-800/30 rounded-3xl p-6 border border-white/5 relative overflow-hidden min-h-[500px] flex flex-col">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+            <div className="mb-6 relative z-10">
+              <h2 className="text-2xl font-bold text-white mb-1">{t('section_title_impact')}</h2>
+              <p className="text-gray-400 text-sm">{t('section_subtitle_impact')}</p>
+            </div>
+
+            <div className="flex-1 flex items-center justify-center relative z-10">
+              <BrainVisual analysis={analysis} showCards={drinks.length > 0} />
+            </div>
+          </section>
+
+          <AICoach drinks={drinks} analysis={analysis} dailyAlcoholGoal={null} />
         </div>
 
-        {/* Section Router */}
-        {activeSection === 'telemetry' && (
-          <TelemetryDashboard
-            drinks={drinks}
-            bacEstimate={bacEstimate}
-            userWeightKg={userProfile.weightKg}
-            onOpenScan={() => setIsScanOpen(true)}
-            onOpenCoach={() => setIsCoachOpen(true)}
-          />
-        )}
-
-        {activeSection === 'brain' && (
-          <BrainVisual bacEstimate={bacEstimate} />
-        )}
-
-        {activeSection === 'logger' && (
+        {/* Right Column: Controls & Stats (5 columns) */}
+        <div className="lg:col-span-5 space-y-6">
           <DrinkLogger
             drinks={drinks}
-            onAddDrink={handleAddDrink}
-            onRemoveDrink={handleRemoveDrink}
-            onLogWater={handleLogWater}
+            onLogDrink={addDrink}
+            onDeleteDrink={deleteDrink}
+            onScanRequest={() => setShowCamera(true)}
           />
-        )}
+
+          <PremiumDashboard
+            isPremium={isPremium}
+            drinks={drinks}
+            onUpgrade={() => setIsPremium(true)}
+          />
+
+          <Achievements drinksCount={drinks.length} />
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer className="z-10 border-t border-cyan-500/20 glass-panel px-4 sm:px-8 py-4 text-center font-mono text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>LUMENDOSE NEURO-BIOMETRIC TELEMETRY ENGINE • v2.0</span>
-          <span>Educational & Personal Monitoring System. Always consume responsibly.</span>
-        </div>
-      </footer>
-
-      {/* SCAN LABEL MODAL (Centered Responsive Dialog) */}
-      <Modal
-        isOpen={isScanOpen}
-        onClose={() => setIsScanOpen(false)}
-        maxWidth="max-w-xl"
-      >
-        <LabelScanner
-          onAddDrink={handleAddDrink}
-          apiKey={apiKey}
-          onClose={() => setIsScanOpen(false)}
-        />
-      </Modal>
-
-      {/* AI COACH MODAL (Centered Responsive Dialog) */}
-      <Modal
-        isOpen={isCoachOpen}
-        onClose={() => setIsCoachOpen(false)}
-        maxWidth="max-w-3xl"
-      >
-        <AICoach
-          drinks={drinks}
-          bacEstimate={bacEstimate}
-          userWeightKg={userProfile.weightKg}
-          apiKey={apiKey}
-          onLogWater={handleLogWater}
-        />
-      </Modal>
-
-      {/* API KEY SETTINGS MODAL */}
-      <ApiKeyModal
-        isOpen={isApiKeyOpen}
-        onClose={() => setIsApiKeyOpen(false)}
-        apiKey={apiKey}
-        onSaveApiKey={handleSaveApiKey}
+      <CameraScanModal
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onScanSuccess={handleScanSuccess}
       />
-
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl glass-panel-glow border border-cyan-400 text-cyan-200 font-mono text-xs shadow-neon-cyan flex items-center gap-2 animate-bounce">
-          <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
     </div>
+  );
+}
+
+
+function AppContent() {
+  const { user, loading } = useAuth();
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    // Keep splash screen for at least 2.5 seconds or until auth loads
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show splash if we're enforcing the timer OR if auth is still initialising
+  if (showSplash || loading) {
+    return <SplashScreen />;
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  return <Dashboard />;
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 }

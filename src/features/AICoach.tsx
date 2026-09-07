@@ -1,258 +1,157 @@
-import React, { useState, useEffect } from 'react';
-import { getAICoachAdvice } from '../services/gemini';
-import { Drink, AICoachAdvice } from '../types';
-import { Bot, Sparkles, Droplets, Clock, AlertTriangle, Send, CheckCircle2, ShieldAlert, HeartPulse } from 'lucide-react';
+import { type FC, useState, useEffect, useCallback } from 'react';
+import type { Drink, Analysis } from '../types';
+import { useTranslation } from '../context/LanguageContext';
+import { Sparkles, Loader2, AlertTriangle } from 'lucide-react';
+import { generateGeminiInsight } from '../services/gemini';
+import { brainRegionsData } from '../utils/brainData';
+import { Card } from '../components/Card';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface AICoachProps {
-  drinks: Drink[];
-  bacEstimate: number;
-  userWeightKg: number;
-  apiKey?: string;
-  onLogWater: () => void;
+    drinks: Drink[];
+    analysis: Analysis | null;
+    dailyAlcoholGoal: number | null;
 }
 
-export const AICoach: React.FC<AICoachProps> = ({
-  drinks,
-  bacEstimate,
-  userWeightKg,
-  apiKey,
-  onLogWater
-}) => {
-  const [advice, setAdvice] = useState<AICoachAdvice | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [chatInput, setChatInput] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([
-    {
-      sender: 'ai',
-      text: 'Greetings. I am Lumina, your neural telemetry coach. I monitor your metabolic clearing curve and synaptic health in real-time.'
-    }
-  ]);
-  const [isAsking, setIsAsking] = useState<boolean>(false);
+export const AICoach: FC<AICoachProps> = ({ drinks, analysis, dailyAlcoholGoal }) => {
+    const { t } = useTranslation();
+    const [insight, setInsight] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isVisible, setIsVisible] = useState(true);
 
-  const fetchAdvice = async () => {
-    setLoading(true);
-    try {
-      const result = await getAICoachAdvice(drinks, bacEstimate, userWeightKg, apiKey);
-      setAdvice(result);
-    } catch (err) {
-      console.error('Failed to load AI Coach telemetry:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const generateInsight = useCallback(async () => {
+        if (!drinks || drinks.length < 1 || !analysis) return;
+        setIsLoading(true);
+        setError(null);
+        setInsight('');
+        console.log("AI Coach: Generating insight...", { drinksCount: drinks.length, analysisKeys: Object.keys(analysis) });
 
-  useEffect(() => {
-    fetchAdvice();
-  }, [drinks.length, bacEstimate, apiKey]);
+        const sessionSummary = drinks.map(d => `${d.volume}ml of ${d.type} at ${d.abv}% ABV`).join(', ');
+        if (!analysis || Object.keys(analysis).length === 0) return;
+        const totalGrams = drinks.reduce((sum, d) => sum + d.alcoholGrams, 0).toFixed(1);
 
-  const handleSendChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isAsking) return;
+        const analysisValues = Object.values(analysis);
+        const highestImpactRegion = analysisValues.length > 0
+            ? analysisValues.sort((a, b) => b.impact - a.impact)[0]
+            : null;
 
-    const userQ = chatInput.trim();
-    setChatMessages(prev => [...prev, { sender: 'user', text: userQ }]);
-    setChatInput('');
-    setIsAsking(true);
+        if (!highestImpactRegion) {
+            console.warn("AI Coach: No impact region data found.");
+            return;
+        }
 
-    try {
-      // Generate intelligent answer based on user context
-      let aiReply = '';
-      const qLower = userQ.toLowerCase();
+        const highestImpactRegionData = Object.values(brainRegionsData).find(r => r.name === highestImpactRegion.name);
 
-      if (qLower.includes('drive') || qLower.includes('car')) {
-        aiReply = bacEstimate > 0
-          ? `WARNING: Your estimated BAC is ${bacEstimate.toFixed(3)}%. In most jurisdictions, driving over 0.05% or 0.08% BAC is illegal and highly dangerous. Estimated time to zero BAC is ${advice?.timeToZeroHours || (bacEstimate / 0.015).toFixed(1)} hours.`
-          : 'Your BAC is at 0.00%. You are sober and clear to operate motor vehicles safely.';
-      } else if (qLower.includes('water') || qLower.includes('hydrate')) {
-        aiReply = advice?.hydrationTip || 'Drink at least 300ml of water with every alcoholic beverage to prevent cellular dehydration.';
-      } else if (qLower.includes('hangover') || qLower.includes('tomorrow')) {
-        aiReply = 'To minimize hangover severity: 1) Stop drinking alcohol 2 hours before sleep, 2) Drink 500ml water with electrolytes before bed, 3) Consume B-complex vitamins and antioxidants.';
-      } else {
-        aiReply = `Based on your telemetry (${drinks.length} drinks logged, ~${bacEstimate.toFixed(3)}% BAC), your cognitive latency is currently ${bacEstimate > 0.05 ? 'moderately elevated' : 'baseline'}. ${advice?.cognitiveStatus || ''}`;
-      }
+        const firstDrinkTime = new Date(drinks[drinks.length - 1].timestamp);
+        const lastDrinkTime = new Date(drinks[0].timestamp);
+        const sessionDurationMinutes = (lastDrinkTime.getTime() - firstDrinkTime.getTime()) / (1000 * 60);
+        const drinksPerHour = drinks.length > 1 && sessionDurationMinutes > 0 ? (drinks.length / (sessionDurationMinutes / 60)) : drinks.length;
 
-      setChatMessages(prev => [...prev, { sender: 'ai', text: aiReply }]);
-    } catch (err) {
-      setChatMessages(prev => [...prev, { sender: 'ai', text: 'Telemetry query processed. Maintain baseline hydration.' }]);
-    } finally {
-      setIsAsking(false);
-    }
-  };
+        let pacingContext = `The user has had ${drinks.length} drinks over ${sessionDurationMinutes.toFixed(0)} minutes.`;
+        pacingContext += drinksPerHour > 2 ? " This is a rapid pace." : " This is a moderate pace.";
 
-  const getRiskBadgeClass = (risk?: AICoachAdvice['riskLevel']) => {
-    switch (risk) {
-      case 'OPTIMAL':
-        return 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300 shadow-neon-green';
-      case 'MILD_ELEVATION':
-        return 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300 shadow-neon-cyan';
-      case 'COGNITIVE_DECAY':
-        return 'bg-amber-950/60 border-amber-500/40 text-amber-300';
-      case 'SEVERE_HAZARD':
-        return 'bg-rose-950/60 border-rose-500/40 text-rose-300 shadow-neon-rose animate-pulse';
-      default:
-        return 'bg-slate-800 border-slate-700 text-slate-300';
-    }
-  };
+        let goalContext = "";
+        if (dailyAlcoholGoal !== null && dailyAlcoholGoal > 0) {
+            const currentGrams = parseFloat(totalGrams);
+            if (currentGrams > dailyAlcoholGoal) {
+                goalContext = `They have exceeded their daily goal of ${dailyAlcoholGoal}g by ${(currentGrams - dailyAlcoholGoal).toFixed(1)}g.`;
+            } else {
+                goalContext = `They are currently at ${currentGrams}g towards their daily goal of ${dailyAlcoholGoal}g.`;
+            }
+        }
 
-  return (
-    <div className="space-y-6">
-      {/* Lumina Avatar Header */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 glass-panel-glow p-5 rounded-2xl border border-purple-500/30">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-2xl bg-purple-950/80 border border-purple-400/50 flex items-center justify-center text-purple-300 shadow-neon-purple">
-            <Bot className="w-10 h-10 animate-pulse" />
-          </div>
-          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-slate-950 shadow-neon-green" />
-        </div>
+        const prompt = `As an expert on the science of alcohol's effects, you are an AI Coach for the app LumenDose. 
+        User Data:
+        - Drinks: ${sessionSummary}
+        - Total Alcohol: ${totalGrams}g
+        - Pacing: ${pacingContext}
+        - Highest Impact: ${t(highestImpactRegion.name)} affecting ${highestImpactRegionData?.functions}
+        - Goal Status: ${goalContext}
 
-        <div className="flex-1 text-center sm:text-left">
-          <div className="flex items-center justify-center sm:justify-start gap-2">
-            <h2 className="text-xl font-orbitron font-bold text-purple-300 text-glow-purple">
-              LUMINA AI NEURO-COACH
-            </h2>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-500/30">
-              ACTIVE TELEMETRY
-            </span>
-          </div>
-          <p className="text-xs font-mono text-slate-300 mt-1">
-            Biometric analysis grounded in Widmark metabolic decay & synaptic receptor dynamics.
-          </p>
-        </div>
+        Task: Provide a single, concise, actionable, and non-judgmental insight (20-30 words). 
+        Focus on specific suggestions (pacing, hydration, food, etc.). 
+        Avoid generic "drink responsibly". Be encouraging.`;
 
-        <button
-          onClick={fetchAdvice}
-          disabled={loading}
-          className="px-3 py-1.5 rounded-xl border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>RE-ANALYZE</span>
-        </button>
-      </div>
+        try {
+            const result = await generateGeminiInsight(prompt);
+            if (result) {
+                setInsight(result);
+            } else {
+                throw new Error("No insight generated");
+            }
+        } catch (err: any) {
+            console.error("AI Coach Error:", err);
+            // FALLBACK: If API fails, generate a local insight so the feature isn't broken
+            const safeInsight = generateLocalInsight(drinks, totalGrams);
+            setInsight(safeInsight + " (Offline Mode)");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [drinks, analysis, t, dailyAlcoholGoal]);
 
-      {/* Warning Alert Banner if active */}
-      {advice?.warningAlert && (
-        <div className="p-4 rounded-2xl bg-rose-950/70 border border-rose-500/50 text-rose-200 flex items-start gap-3 shadow-neon-rose animate-pulse">
-          <ShieldAlert className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-orbitron font-bold text-xs uppercase tracking-wider text-rose-300">
-              SAFETY WARNING ALERT
-            </div>
-            <p className="text-xs font-mono mt-1 text-rose-100">{advice.warningAlert}</p>
-          </div>
-        </div>
-      )}
+    // Helper for offline insights
+    const generateLocalInsight = (currentDrinks: Drink[], grams: string) => {
+        const count = currentDrinks.length;
+        if (count > 4) return "Pace yourself. Hydrate now to reduce tomorrow's impact.";
+        if (count > 2) return "Consider a glass of water between drinks to stay balanced.";
+        if (parseFloat(grams) > 40) return "You've reached a high intake level. Good time for a break?";
+        return "Enjoy responsibly. Tracking your intake helps you stay in control.";
+    };
 
-      {/* Metrics Row */}
-      {advice && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Status Badge */}
-          <div className={`p-4 rounded-2xl border flex flex-col justify-between ${getRiskBadgeClass(advice.riskLevel)}`}>
-            <div className="text-[10px] font-mono uppercase tracking-wider opacity-80">Biometric Risk Status</div>
-            <div className="font-orbitron font-extrabold text-lg mt-2">{advice.riskLevel.replace('_', ' ')}</div>
-            <div className="text-[11px] font-mono mt-1 opacity-90 line-clamp-1">{advice.cognitiveStatus}</div>
-          </div>
+    useEffect(() => {
+        if (drinks.length >= 1 && isVisible) {
+            generateInsight();
+        }
+    }, [drinks.length, isVisible]); // Removed generateInsight from deps to avoid loops, though useCallback handles it.
 
-          {/* Time to 0.00 BAC */}
-          <div className="p-4 rounded-2xl glass-panel border border-cyan-500/30 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-[10px] font-mono text-cyan-400 uppercase">
-              <span>Zero-BAC Recovery</span>
-              <Clock className="w-4 h-4" />
-            </div>
-            <div className="font-orbitron font-bold text-2xl text-cyan-300 mt-1">
-              ~{advice.timeToZeroHours} <span className="text-xs font-sans font-normal text-slate-400">hours</span>
-            </div>
-            <div className="text-[11px] font-mono text-slate-300 mt-1">
-              Full metabolic clearance estimated.
-            </div>
-          </div>
+    if (drinks.length < 1 || !isVisible) return null;
 
-          {/* Hydration Action */}
-          <div className="p-4 rounded-2xl glass-panel border border-emerald-500/30 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 uppercase">
-              <span>Hydration Protocol</span>
-              <Droplets className="w-4 h-4" />
-            </div>
-            <div className="text-xs font-sans text-emerald-200 mt-1 line-clamp-2">
-              {advice.hydrationTip}
-            </div>
-            <button
-              onClick={onLogWater}
-              className="mt-2 py-1.5 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 text-xs font-orbitron font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Droplets className="w-3.5 h-3.5" />
-              <span>LOG +300ML WATER</span>
-            </button>
-          </div>
-        </div>
-      )}
+    return (
+        <AnimatePresence>
+            {isVisible && (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                >
+                    <Card className="mt-6 bg-gradient-to-br from-blue-900/40 to-purple-900/40 border-blue-500/30 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4">
+                            <button onClick={() => setIsVisible(false)} className="text-blue-300/50 hover:text-white transition-colors">
+                                <span className="sr-only">Close</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </button>
+                        </div>
 
-      {/* Actionable Recommendations */}
-      {advice && advice.recommendations.length > 0 && (
-        <div className="glass-panel p-5 rounded-2xl border border-purple-500/30 space-y-3">
-          <h3 className="text-xs font-orbitron font-bold text-purple-300 uppercase tracking-wider flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-purple-400" /> Actionable Neuro-Prescriptions
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-            {advice.recommendations.map((rec, i) => (
-              <div key={i} className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/20 text-xs font-mono text-purple-100 flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-purple-500/30 text-purple-300 flex items-center justify-center shrink-0 text-[10px] font-bold">
-                  {i + 1}
-                </span>
-                <span>{rec}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+                        <div className="flex items-start gap-4">
+                            <div className="bg-blue-500/20 p-3 rounded-xl">
+                                <Sparkles className="text-blue-400" size={24} />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                                    {t('ai_coach_title')}
+                                </h3>
 
-      {/* Interactive AI Telemetry Chat */}
-      <div className="glass-panel p-5 rounded-2xl border border-cyan-500/30 space-y-4">
-        <h3 className="text-xs font-orbitron font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-          <Bot className="w-4 h-4 text-cyan-400" /> Interactive AI Telemetry Chat
-        </h3>
-
-        {/* Chat Messages Box */}
-        <div className="h-48 overflow-y-auto custom-scrollbar p-3 rounded-xl bg-slate-950/70 border border-cyan-500/10 space-y-3 font-mono text-xs">
-          {chatMessages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-            >
-              <div
-                className={`max-w-[85%] p-3 rounded-xl ${
-                  msg.sender === 'user'
-                    ? 'bg-cyan-600/30 border border-cyan-400/40 text-cyan-100 rounded-br-none'
-                    : 'bg-purple-950/50 border border-purple-500/30 text-purple-100 rounded-bl-none'
-                }`}
-              >
-                <div className="text-[9px] text-slate-400 mb-1 uppercase font-bold">
-                  {msg.sender === 'user' ? 'YOU' : 'LUMINA AI'}
-                </div>
-                <div>{msg.text}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Chat Input Form */}
-        <form onSubmit={handleSendChat} className="flex items-center gap-2">
-          <input
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            placeholder="Ask Lumina e.g. 'Can I drive in 2 hours?' or 'How do I avoid hangover?'"
-            className="flex-1 bg-slate-900/80 border border-cyan-500/30 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-mono"
-          />
-          <button
-            type="submit"
-            disabled={isAsking || !chatInput.trim()}
-            className="px-4 py-2.5 rounded-xl bg-purple-500/30 hover:bg-purple-500/40 border border-purple-400/40 text-purple-300 font-orbitron text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>ASK</span>
-          </button>
-        </form>
-      </div>
-    </div>
-  );
+                                {isLoading ? (
+                                    <div className="flex items-center gap-2 text-blue-200/70">
+                                        <Loader2 className="animate-spin" size={16} />
+                                        <span>{t('ai_coach_generating')}</span>
+                                    </div>
+                                ) : error ? (
+                                    <div className="flex items-center gap-2 text-yellow-400/90 text-sm bg-yellow-900/20 p-2 rounded-lg">
+                                        <AlertTriangle size={16} />
+                                        <p>{error}</p>
+                                    </div>
+                                ) : (
+                                    <p className="text-blue-100 leading-relaxed font-medium">
+                                        {insight}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </Card>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
 };
